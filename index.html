@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#f4efe4" />
+    <title>Brick Borough — build happy little cities</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet">
+  </head>
+  <body>
+    <canvas id="world" aria-label="Interactive 3D brick city builder"></canvas>
+
+    <header class="topbar">
+      <a class="brand" href="#" aria-label="Brick Borough home">
+        <span class="brand-mark"><i></i><i></i><i></i><i></i></span>
+        <span>BRICK BOROUGH</span>
+      </a>
+      <nav aria-label="Game navigation">
+        <button class="nav-item active">Build</button>
+        <button class="nav-item">Blueprints</button>
+        <button class="nav-item">My cities</button>
+      </nav>
+      <div class="top-actions">
+        <button class="round-button" aria-label="Settings">⚙</button>
+        <button class="profile"><span>Alex</span><b>AB</b></button>
+      </div>
+    </header>
+
+    <aside class="build-panel glass-panel">
+      <div class="panel-heading">
+        <div><p class="eyebrow">BUILD MODE</p><h1>Choose a brick</h1></div>
+        <button id="closePanel" aria-label="Collapse build menu">−</button>
+      </div>
+
+      <label class="search"><span>⌕</span><input id="search" type="search" placeholder="Search pieces..." /></label>
+
+      <div class="categories" role="tablist" aria-label="Brick categories">
+        <button class="category active" data-category="all"><span>▦</span>All</button>
+        <button class="category" data-category="basic"><span>▰</span>Basic</button>
+        <button class="category" data-category="nature"><span>♣</span>Nature</button>
+        <button class="category" data-category="city"><span>▥</span>City</button>
+      </div>
+
+      <div class="pieces" id="pieces">
+        <button class="piece selected" data-piece="home" data-category="city" data-color="#e96d4c"><span class="piece-art home-art"></span><strong>Cozy Home</strong><small>24 bricks</small></button>
+        <button class="piece" data-piece="tower" data-category="city" data-color="#f0b832"><span class="piece-art tower-art"></span><strong>Sunny Tower</strong><small>42 bricks</small></button>
+        <button class="piece" data-piece="tree" data-category="nature" data-color="#65a86e"><span class="piece-art tree-art"></span><strong>Round Tree</strong><small>8 bricks</small></button>
+        <button class="piece" data-piece="shop" data-category="city" data-color="#65a5b9"><span class="piece-art shop-art"></span><strong>Corner Shop</strong><small>31 bricks</small></button>
+        <button class="piece" data-piece="brick" data-category="basic" data-color="#d85545"><span class="piece-art brick-art"></span><strong>2 × 4 Brick</strong><small>1 brick</small></button>
+        <button class="piece" data-piece="park" data-category="nature" data-color="#89b85d"><span class="piece-art park-art"></span><strong>Tiny Park</strong><small>16 bricks</small></button>
+      </div>
+
+      <div class="selected-info"><span class="swatch"></span><div><small>SELECTED</small><strong id="selectedName">Cozy Home</strong></div><kbd>R</kbd><span class="rotate-label">Rotate</span></div>
+    </aside>
+
+    <section class="city-info glass-panel">
+      <div class="level"><span>7</span><div><small>BOROUGH LEVEL</small><strong>Rising Builder</strong></div></div>
+      <div class="progress"><i></i></div>
+      <div class="stats"><span><small>POPULATION</small><b>1,248</b></span><span><small>HAPPINESS</small><b>😊 92%</b></span><span><small>BRICKS LEFT</small><b id="brickCount">640</b></span></div>
+    </section>
+
+    <div class="hint"><span>🖱</span><b>Click</b> to place <i></i><span>↔</span><b>Drag</b> to explore <i></i><b>Scroll</b> to zoom</div>
+
+    <div class="tools glass-panel" aria-label="World tools">
+      <button class="tool active" data-tool="build" title="Build">✦</button>
+      <button class="tool" data-tool="bulldoze" title="Bulldoze">♢</button>
+      <hr />
+      <button id="zoomIn" title="Zoom in">＋</button>
+      <button id="zoomOut" title="Zoom out">−</button>
+    </div>
+
+    <div class="toast" id="toast">Cozy Home placed! <b>+12 XP</b></div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
