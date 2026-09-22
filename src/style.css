@@ -29,20 +29,19 @@ h1 { font: 700 23px "Space Grotesk"; letter-spacing: -.7px; margin: 0; }
 .category { border: 0; border-radius: 8px; padding: 7px 9px; background: transparent; color: #767b72; font-size: 11px; cursor: pointer; }
 .category span { display: block; font-size: 16px; height: 19px; }
 .category.active { background: #e8f0df; color: #568153; font-weight: 700; }
-.pieces { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; max-height: calc(100vh - 410px); overflow-y: auto; padding: 2px; scrollbar-width: thin; }
+.pieces { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; max-height: calc(100vh - 446px); overflow-y: auto; padding: 2px; scrollbar-width: thin; }
 .piece { text-align: left; border: 1.5px solid #e5e2d9; border-radius: 11px; background: #faf8f2; padding: 8px; cursor: pointer; transition: .18s ease; }
 .piece:hover { transform: translateY(-2px); box-shadow: 0 5px 14px rgba(61,65,53,.1); }
 .piece.selected { border-color: #e46e4e; background: #fff8f3; box-shadow: 0 0 0 2px rgba(228,110,78,.12); }
 .piece strong, .piece small { display: block; }
 .piece strong { font-size: 12px; margin-top: 6px; }
 .piece small { font-size: 10px; color: #999b93; margin-top: 2px; }
-.piece-art { display: block; height: 55px; position: relative; border-radius: 7px; background-color: #e8ecdf; background-position: center; background-repeat: no-repeat; }
-.home-art { background-image: linear-gradient(135deg,transparent 50%,#df684b 51%), linear-gradient(45deg,#d65c42 50%,transparent 51%), linear-gradient(#f5d176,#f5d176); background-size: 34px 22px,34px 22px,43px 27px; background-position: 49px 8px,15px 8px,27px 27px; }
-.tower-art { background-image: linear-gradient(#edae35,#edae35); background-size: 35px 43px; }
-.tree-art { background-image: radial-gradient(circle,#5a9e61 55%,transparent 57%),linear-gradient(#9b6844,#9b6844); background-size: 38px 38px,7px 25px; background-position: 50% 4px,50% 29px; }
-.shop-art { background-image: linear-gradient(#e76b55 0 24%,#f3ead0 25%); background-size: 50px 38px; }
-.brick-art { background-image: radial-gradient(circle,#f0765d 30%,transparent 34%),linear-gradient(#d95d47,#d95d47); background-size: 12px 12px,56px 27px; background-position: 50% 8px,50% 22px; }
-.park-art { background-image: radial-gradient(circle,#74aa61 55%,transparent 58%),radial-gradient(circle,#4f965c 55%,transparent 58%),linear-gradient(#acd06d,#acd06d); background-size: 30px 30px,27px 27px,58px 13px; background-position: 27px 7px,58px 13px,50% 39px; }
+.piece-art { display: block; height: 55px; position: relative; border-radius: 7px; background-color: #e8ecdf; background-position: center; background-repeat: no-repeat; background-size: contain; }
+.piece[hidden] { display: none; }
+.colors { position: absolute; left: 20px; right: 20px; bottom: 70px; display: flex; flex-wrap: wrap; gap: 5px; transition: opacity .2s; }
+.colors.locked { opacity: .3; pointer-events: none; }
+.color-dot { width: 18px; height: 18px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 0 0 1px #d9d5ca; cursor: pointer; padding: 0; }
+.color-dot.active { box-shadow: 0 0 0 2px #e46e4e; }
 .selected-info { position: absolute; bottom: 17px; left: 20px; right: 20px; border-top: 1px solid #e4e0d6; padding-top: 13px; display: flex; align-items: center; gap: 9px; }
 .selected-info .swatch { width: 28px; height: 28px; background: #e96d4c; border-radius: 7px; }
 .selected-info div { flex: 1; }
@@ -72,4 +71,4 @@ kbd { border: 1px solid #d7d3c9; padding: 3px 7px; border-radius: 5px; box-shado
 .go-stats small { display: block; font-size: 8px; letter-spacing: 1px; color: #999b93; }
 .go-stats b { display: block; font: 700 16px "Space Grotesk"; margin-top: 4px; }
 #restartBtn { width: 100%; border: 0; border-radius: 10px; background: #e66a48; color: white; font-weight: 700; padding: 13px; cursor: pointer; font-size: 13px; }
-@media(max-width:800px){nav{display:none}.build-panel{width:280px}.city-info{display:none}.profile span{display:none}.hint{display:none}.pieces{max-height:calc(100vh - 410px)} }
+@media(max-width:800px){nav{display:none}.build-panel{width:280px}.city-info{display:none}.profile span{display:none}.hint{display:none}.pieces{max-height:calc(100vh - 446px)} }

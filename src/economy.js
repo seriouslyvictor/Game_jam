@@ -2,7 +2,6 @@
 // Pure-ish helpers over the placement records main.js already tracks (`placed`, `columns`).
 // Nothing here touches the scene graph; main.js calls in with records and gets numbers back.
 
-export const POP = { home: 4, tower: 10 }; // population contributed per piece, for the HUD number
 const RADIUS = 2; // world units of clearance that still counts as "next to"
 
 // Chebyshev gap between two axis-aligned boxes, in world units. 0 means touching.
@@ -31,36 +30,76 @@ function touchesRoad(rec, isRoadCell) {
   return false;
 }
 
-// Scores one placement against its current neighbours. `isRoadCell(cx,cz)` lets main.js
-// answer the road-adjacency question without economy.js knowing about road geometry.
-// Returns {total, notes} — notes are short labels in score order, for the toast.
+// Anything green counts as "nature" for the homes and groves that care about it.
+const GREEN = new Set(['tree', 'park', 'garden', 'water', 'plaza']);
+
+// Scores one placement against its current neighbours. Rules key off `kind` (set from
+// PIECES in main.js), so a pine scores as a tree and a bakery as a shop.
+// `isRoadCell(cx,cz)` lets main.js answer the road-adjacency question without economy.js
+// knowing about road geometry. Returns {total, notes} — notes are short labels, for the toast.
 export function scorePlacement(rec, placed, isRoadCell) {
   let total = 0;
   const notes = [];
   const near = neighbours(rec, placed);
-  const has = t => near.some(o => o.type === t);
+  const has = k => near.some(o => o.kind === k);
+  const green = near.some(o => GREEN.has(o.kind));
   const add = (amount, label) => { total += amount; notes.push([amount, label]); };
+  const road = (bonus, penalty) => { if (touchesRoad(rec, isRoadCell)) add(bonus, 'Connected'); else if (penalty) add(penalty, 'Isolated'); };
 
-  if (rec.type === 'home') {
-    if (near.some(o => o.type === 'tree' || o.type === 'park')) add(18, 'Cozy');
-    if (has('shop')) add(14, 'Convenient');
-    if (has('tower')) add(-12, 'Overshadowed');
-    if (touchesRoad(rec, isRoadCell)) add(10, 'Connected'); else add(-6, 'Isolated');
-  } else if (rec.type === 'tower') {
-    if (has('tower')) add(16, 'Downtown');
-    if (touchesRoad(rec, isRoadCell)) add(8, 'Connected'); else add(-6, 'Isolated');
-  } else if (rec.type === 'tree' || rec.type === 'park') {
-    if (near.some(o => o.type === 'tree' || o.type === 'park')) add(6, 'Grove');
-  } else if (rec.type === 'shop') {
-    if (has('home')) add(10, 'Popular');
-    if (touchesRoad(rec, isRoadCell)) add(6, 'Connected');
+  switch (rec.kind) {
+    case 'home':
+      if (green) add(18, 'Cozy');
+      if (has('shop')) add(14, 'Convenient');
+      if (has('civic')) add(10, 'Safe');
+      if (has('landmark')) add(8, 'Postcard view');
+      if (has('tower')) add(-12, 'Overshadowed');
+      road(10, -6);
+      break;
+    case 'tower':
+      if (has('tower')) add(16, 'Downtown');
+      if (has('landmark')) add(6, 'Skyline');
+      road(8, -6);
+      break;
+    case 'shop':
+      if (has('home')) add(10, 'Popular');
+      if (has('plaza') || has('landmark')) add(8, 'Busy square');
+      road(6);
+      break;
+    case 'civic':
+      if (has('home')) add(12, 'On call');
+      road(8, -6);
+      break;
+    case 'landmark': {
+      // Rewards putting it at the heart of things: +4 for every different kind of neighbour.
+      const kinds = new Set(near.map(o => o.kind).filter(k => k !== 'part'));
+      if (kinds.size) add(Math.min(24, kinds.size * 4), 'Centerpiece');
+      road(6);
+      break;
+    }
+    case 'tree': case 'park':
+      if (green) add(6, 'Grove');
+      break;
+    case 'garden':
+      if (has('home')) add(8, 'Blooming');
+      else if (green) add(4, 'Grove');
+      break;
+    case 'water':
+      if (green) add(10, 'Oasis');
+      break;
+    case 'plaza':
+      if (has('shop') || has('landmark')) add(12, 'Town square');
+      else if (has('home')) add(6, 'Meeting spot');
+      break;
+    case 'deco':
+      if (has('home') || has('shop') || has('plaza')) add(4, 'Charming');
+      break;
   }
   return { total, notes };
 }
 
 // Population is derived fresh from whatever is currently placed — no running counter to drift.
 export function population(placed) {
-  return placed.reduce((sum, r) => sum + (POP[r.type] || 0), 0);
+  return placed.reduce((sum, r) => sum + (r.pop || 0), 0);
 }
 
 export const LEVELS = [
