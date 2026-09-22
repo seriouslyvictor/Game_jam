@@ -40,14 +40,34 @@ sun.position.set(-18, 32, 14); sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048); sun.shadow.camera.left = -28; sun.shadow.camera.right = 28; sun.shadow.camera.top = 28; sun.shadow.camera.bottom = -28;
 scene.add(sun);
 
-const palette = { green:0x9bbc79, darkGreen:0x4f895c, cream:0xf4dda0, coral:0xd9674c, blue:0x72a7ad, yellow:0xe9b842, road:0x767b74, white:0xf5efe0, brown:0x986442 };
+const palette = { green:0x9bbc79, darkGreen:0x4f895c, cream:0xf4dda0, coral:0xd9674c, blue:0x72a7ad, yellow:0xe9b842, road:0x767b74, white:0xf5efe0, brown:0x986442,
+  red:0xc8453b, grey:0xa9aca3, darkGrey:0x5a5f58, pink:0xe899ae, gold:0xd9a93a };
 const mats = {};
 Object.entries(palette).forEach(([key,value]) => mats[key] = new THREE.MeshStandardMaterial({color:value, roughness:.72, metalness:0}));
+mats.water = new THREE.MeshStandardMaterial({ color:0x5aa6c8, roughness:.18, metalness:.05 });
+mats.glow = new THREE.MeshStandardMaterial({ color:0xfff0b8, emissive:0xffd66b, emissiveIntensity:.9, roughness:.4 });
 // Every geometry below is shared by every piece that uses it — nothing is allocated per placement.
 const studGeo = new THREE.CylinderGeometry(.18,.18,.12,16);
 const boxGeo = new THREE.BoxGeometry(1,1,1);
 const blobGeo = new THREE.SphereGeometry(.7,14,10);
 const wheelGeo = new THREE.CylinderGeometry(.2,.2,.12,12);
+const cylGeo = new THREE.CylinderGeometry(1,1,1,20);
+const coneGeo = new THREE.ConeGeometry(1,1,8);
+const pyramidGeo = new THREE.ConeGeometry(1,1,4);
+// A 2x2 roof slope: flat studded strip at the back (-z), falling to a low lip at the front (+z).
+const slopeGeo = (() => {
+  const s = new THREE.Shape([[1,0],[-1,0],[-1,.2],[.5,1.2],[1,1.2]].map(([a,b]) => new THREE.Vector2(a,b)));
+  const g = new THREE.ExtrudeGeometry(s, { depth:2, bevelEnabled:false });
+  g.rotateY(Math.PI/2); g.translate(-1,0,0);   // extrude along x; shape x becomes -z
+  return g;
+})();
+// Triangular gable prism, 2.1 wide and 3.1 deep, for pitched roofs.
+const gableGeo = (() => {
+  const s = new THREE.Shape([new THREE.Vector2(-1.05,0), new THREE.Vector2(1.05,0), new THREE.Vector2(0,.9)]);
+  const g = new THREE.ExtrudeGeometry(s, { depth:3.1, bevelEnabled:false });
+  g.translate(0,0,-1.55);
+  return g;
+})();
 const dummy = new THREE.Object3D();
 
 // Placement colours are cached so re-picking a swatch doesn't leak a material each click.
@@ -112,15 +132,58 @@ function tree(g){ brick(g,0,.7,0,.45,1.4,.45,mats.brown);[[0,1.6,0],[.55,1.55,0]
 function shop(g){ brick(g,0,.55,0,4,1.1,3.2,mats.blue);brick(g,0,1.35,0,4.2,.5,3.4,mats.coral);studs(0,1.66,0,4.2,3.4,mats.coral);brick(g,0,.65,1.61,1.5,.85,.08,mats.white,false);}
 function car(x,z,color){const g=new THREE.Group();g.position.set(x,.12,z);scene.add(g);brick(g,0,.3,0,1.8,.45,.9,color,false);brick(g,0,.72,0,.9,.4,.8,mats.cream,false);[[-.55,.11,.48],[.55,.11,.48],[-.55,.11,-.48],[.55,.11,-.48]].forEach(p=>{const wheel=mesh(wheelGeo,mats.road,p,[1,1,1],g);wheel.rotation.x=Math.PI/2});}
 
+// --- new city pieces ---
+function townhouse(g, color=mats.blue){ brick(g,0,.5,0,2,1,3,mats.white,false);brick(g,0,1.4,0,2,.8,3,color,false);mesh(gableGeo,mats.red,[0,1.8,0],[1,1,1],g);brick(g,.55,2.35,-.8,.3,.7,.3,mats.darkGrey,false);
+  brick(g,-.45,.45,1.52,.55,.9,.06,mats.brown,false);brick(g,.45,.55,1.52,.5,.45,.06,mats.blue,false);[-.45,.45].forEach(px=>brick(g,px,1.45,1.52,.5,.42,.06,mats.blue,false));}
+function bakery(g){ brick(g,0,.6,0,3,1.2,3,mats.cream,false);brick(g,0,1.35,0,3.1,.3,3.1,mats.brown);for(let i=0;i<5;i++)brick(g,-1.2+i*.6,1,1.68,.6,.1,.4,i%2?mats.white:mats.coral,false);
+  brick(g,.5,.55,1.52,1.3,.55,.06,mats.blue,false);brick(g,-.85,.5,1.52,.55,1,.06,mats.brown,false);}
+function fireStation(g){ brick(g,0,.8,0,5,1.6,4,mats.red,false);brick(g,0,1.75,0,5.2,.3,4.2,mats.white);[-1.2,1.2].forEach(px=>{brick(g,px,.6,2.02,1.7,1.2,.06,mats.cream,false);for(let y=.25;y<1.2;y+=.3)brick(g,px,y,2.06,1.7,.03,.02,mats.grey,false);});
+  brick(g,0,1.4,2.02,2,.28,.06,mats.yellow,false);mesh(blobGeo,mats.glow,[0,2.05,-1.2],[.22,.22,.22],g);}
+function clockTower(g){ brick(g,0,.6,0,2,1.2,2,mats.cream,false);brick(g,0,2.2,0,1.6,2,1.6,mats.white,false);
+  for(let i=0;i<4;i++){const side=new THREE.Group();side.rotation.y=i*Math.PI/2;g.add(side);mesh(cylGeo,mats.cream,[0,2.55,.81],[.5,.05,.5],side).rotation.x=Math.PI/2;brick(side,0,2.68,.85,.06,.3,.02,mats.darkGrey,false);brick(side,.1,2.55,.85,.22,.06,.02,mats.darkGrey,false);}
+  brick(g,0,3.55,0,1.8,.7,1.8,mats.coral,false);mesh(pyramidGeo,mats.darkGreen,[0,4.45,0],[1.25,1.1,1.25],g).rotation.y=Math.PI/4;mesh(blobGeo,mats.gold,[0,5.05,0],[.15,.15,.15],g);}
+// --- nature ---
+function pine(g){ brick(g,0,.35,0,.4,.7,.4,mats.brown,false);[[1.2,.95,1.4],[1.85,.72,1.1],[2.45,.5,.9]].forEach(([y,r,h])=>mesh(coneGeo,mats.darkGreen,[0,y,0],[r,h,r],g));}
+function park(g){ brick(g,0,.1,0,2,.2,2,mats.green);brick(g,.35,.21,0,.35,.02,2,mats.cream,false);brick(g,-.55,.5,-.5,.2,.6,.2,mats.brown,false);mesh(blobGeo,mats.darkGreen,[-.55,1.05,-.5],[.55,.55,.55],g);
+  brick(g,-.45,.45,.6,.8,.07,.3,mats.brown,false);brick(g,-.45,.62,.76,.8,.28,.05,mats.brown,false);}
+function flowerbed(g){ brick(g,0,.12,0,2,.24,2,mats.darkGreen,false);brick(g,0,.27,0,1.7,.08,1.7,mats.brown,false);const cols=[mats.coral,mats.yellow,mats.white,mats.pink];
+  for(let i=0;i<4;i++)for(let j=0;j<4;j++)mesh(blobGeo,cols[(i+j*2)%4],[-.6+i*.4,.42,-.6+j*.4],[.17,.17,.17],g);}
+function pond(g){ brick(g,0,.1,0,3,.2,3,mats.grey,false);brick(g,0,.16,0,2.4,.12,2.4,mats.water,false);mesh(cylGeo,mats.green,[.55,.23,.4],[.32,.02,.32],g);
+  mesh(blobGeo,mats.yellow,[-.4,.33,-.3],[.22,.16,.18],g);mesh(blobGeo,mats.yellow,[-.28,.5,-.3],[.12,.12,.12],g);brick(g,-.15,.5,-.3,.1,.04,.06,mats.coral,false);}
+// --- decor ---
+function fountain(g){ mesh(cylGeo,mats.grey,[0,.18,0],[.95,.36,.95],g);mesh(cylGeo,mats.water,[0,.37,0],[.8,.04,.8],g);mesh(cylGeo,mats.grey,[0,.75,0],[.16,.8,.16],g);
+  mesh(cylGeo,mats.grey,[0,1.12,0],[.45,.12,.45],g);mesh(blobGeo,mats.water,[0,1.2,0],[.3,.2,.3],g);}
+function lamp(g){ mesh(cylGeo,mats.darkGrey,[0,.08,0],[.24,.16,.24],g);mesh(cylGeo,mats.darkGrey,[0,.95,0],[.06,1.75,.06],g);brick(g,0,1.92,0,.42,.14,.42,mats.darkGrey,false);mesh(blobGeo,mats.glow,[0,1.76,0],[.17,.17,.17],g);}
+// --- basic parts ---
+function arch(g,c){ [-1.25,1.25].forEach(px=>brick(g,px,.45,0,.5,.9,1,c,false));brick(g,0,1.05,0,3,.3,1,c);brick(g,0,.84,0,2,.12,.9,c,false);}
+function slope(g,c){ mesh(slopeGeo,c,[0,0,0],[1,1,1],g);studs(0,1.26,-.75,2,.5,c);}
+
 // `h` is the height of the piece's brick body, NOT including its studs -- so the next
 // piece up sits flush on the body and the studs bury into it, the way real bricks clutch.
+// `kind` is what economy.js scores by (a pine is a tree, a bakery is a shop); `pop` feeds
+// the population number; `cap` pieces have nothing to clutch on top, so nothing stacks on
+// them; `tint` pieces take the colour picked in the build menu. `color` is their default.
 const PIECES = {
-  home:  { w:4, d:4, h:2,    cost:24, scale:1,   build:(g,c)=>house(g,c) },
-  tower: { w:4, d:4, h:3.4,  cost:42, scale:1,   build:g=>tower(g) },
-  tree:  { w:2, d:2, h:2.38, cost:8,  scale:.85, build:g=>tree(g) },
-  shop:  { w:5, d:4, h:1.6,  cost:31, scale:1,   build:g=>shop(g) },
-  brick: { w:2, d:1, h:.6,   cost:1,  scale:1,   build:(g,c)=>brick(g,0,.3,0,2,.6,1,c) },
-  park:  { w:2, d:2, h:2.38, cost:16, scale:.85, build:g=>tree(g) },   // TODO(P3): give the park its own model
+  home:        { name:'Cozy Home',    cat:'city',   color:'#e96d4c', cost:24, w:4, d:4, h:2,    scale:1,   kind:'home',     pop:4,  tint:true, build:(g,c)=>house(g,c) },
+  townhouse:   { name:'Townhouse',    cat:'city',   color:'#72a7ad', cost:20, w:2, d:3, h:2.7,  scale:1,   kind:'home',     pop:3,  tint:true, cap:true, build:(g,c)=>townhouse(g,c) },
+  tower:       { name:'Sunny Tower',  cat:'city',   color:'#f0b832', cost:42, w:4, d:4, h:3.4,  scale:1,   kind:'tower',    pop:10, build:g=>tower(g) },
+  shop:        { name:'Corner Shop',  cat:'city',   color:'#65a5b9', cost:31, w:5, d:4, h:1.6,  scale:1,   kind:'shop',     build:g=>shop(g) },
+  bakery:      { name:'Bakery',       cat:'city',   color:'#f4dda0', cost:22, w:3, d:3, h:1.5,  scale:1,   kind:'shop',     build:g=>bakery(g) },
+  firestation: { name:'Fire Station', cat:'city',   color:'#c8453b', cost:38, w:5, d:4, h:1.9,  scale:1,   kind:'civic',    build:g=>fireStation(g) },
+  clocktower:  { name:'Clock Tower',  cat:'city',   color:'#f5efe0', cost:60, w:2, d:2, h:5.2,  scale:1,   kind:'landmark', cap:true, build:g=>clockTower(g) },
+  tree:        { name:'Round Tree',   cat:'nature', color:'#65a86e', cost:8,  w:2, d:2, h:2.38, scale:.85, kind:'tree',     cap:true, build:g=>tree(g) },
+  pine:        { name:'Pine Tree',    cat:'nature', color:'#4f895c', cost:8,  w:2, d:2, h:2.9,  scale:1,   kind:'tree',     cap:true, build:g=>pine(g) },
+  park:        { name:'Tiny Park',    cat:'nature', color:'#89b85d', cost:16, w:2, d:2, h:1.45, scale:1,   kind:'park',     cap:true, build:g=>park(g) },
+  flowerbed:   { name:'Flower Bed',   cat:'nature', color:'#e899ae', cost:5,  w:2, d:2, h:.6,   scale:1,   kind:'garden',   cap:true, build:g=>flowerbed(g) },
+  pond:        { name:'Duck Pond',    cat:'nature', color:'#5aa6c8', cost:14, w:3, d:3, h:.25,  scale:1,   kind:'water',    cap:true, build:g=>pond(g) },
+  fountain:    { name:'Fountain',     cat:'decor',  color:'#a9aca3', cost:18, w:2, d:2, h:1.35, scale:1,   kind:'plaza',    cap:true, build:g=>fountain(g) },
+  lamp:        { name:'Street Lamp',  cat:'decor',  color:'#5a5f58', cost:3,  w:1, d:1, h:2,    scale:1,   kind:'deco',     cap:true, build:g=>lamp(g) },
+  brick:       { name:'2 × 4 Brick',  cat:'basic',  color:'#d85545', cost:1,  w:2, d:1, h:.6,   scale:1,   kind:'part',     tint:true, build:(g,c)=>brick(g,0,.3,0,2,.6,1,c) },
+  brick1:      { name:'2 × 2 Brick',  cat:'basic',  color:'#f0b832', cost:1,  w:1, d:1, h:.6,   scale:1,   kind:'part',     tint:true, build:(g,c)=>brick(g,0,.3,0,1,.6,1,c) },
+  brick2:      { name:'4 × 4 Brick',  cat:'basic',  color:'#3f6fb5', cost:2,  w:2, d:2, h:.6,   scale:1,   kind:'part',     tint:true, build:(g,c)=>brick(g,0,.3,0,2,.6,2,c) },
+  plate:       { name:'4 × 4 Plate',  cat:'basic',  color:'#9bbc79', cost:1,  w:2, d:2, h:.2,   scale:1,   kind:'part',     tint:true, build:(g,c)=>brick(g,0,.1,0,2,.2,2,c) },
+  arch:        { name:'2 × 6 Arch',   cat:'basic',  color:'#f5efe0', cost:3,  w:3, d:1, h:1.2,  scale:1,   kind:'part',     tint:true, build:(g,c)=>arch(g,c) },
+  slope:       { name:'Roof Slope',   cat:'basic',  color:'#c8453b', cost:3,  w:2, d:2, h:1.2,  scale:1,   kind:'part',     tint:true, cap:true, build:(g,c)=>slope(g,c) },
 };
 
 /* ---------- column grid ----------
@@ -160,6 +223,7 @@ function supportHeight(cells) {
   for (const key of cells) {
     const col = columns.get(key);
     if (col && col.road) return null;
+    if (col && col.stack[col.stack.length - 1]?.cap) return null;
     const top = col ? col.top : 0;
     if (h === null) h = top;
     else if (Math.abs(top - h) > 1e-6) return null;
@@ -187,7 +251,8 @@ function spawn(type, x, z, rot, color, starter = false, id = nextId++, y = 0) {
   if (def.scale !== 1) g.scale.setScalar(def.scale);
   scene.add(g);
   // rot/color/starter/y ride along on the record so persistence and undo can rebuild this exact piece.
-  const record = { id, type, group: g, cells: cellsFor(x, z, w, d), w, d, h: def.h, x, y, z, rot, color: color ? '#' + color.color.getHexString() : null, starter, score: 0, refund: starter ? 0 : def.cost };
+  const record = { id, type, group: g, cells: cellsFor(x, z, w, d), w, d, h: def.h, x, y, z, rot, color: color ? '#' + color.color.getHexString() : null, starter, score: 0, refund: starter ? 0 : def.cost,
+    kind: def.kind, pop: def.pop || 0, cap: !!def.cap };
   if (id >= nextId) nextId = id + 1;
   g.userData.record = record;
   record.cells.forEach(key => { const col = column(key); col.stack.push(record); col.top = y + def.h; });
@@ -222,6 +287,9 @@ function defaultCity() {
   spawn('home',-7,-4.3,0,mats.coral,true); spawn('home',10,-4.1,0,mats.blue,true);
   spawn('tower',-10,6.3,0,null,true); spawn('shop',9,6.1,0,null,true); spawn('tower',.7,-6.2,0,null,true);
   [[-12,-6],[-5,-7],[-2,7],[7,-7],[13,7],[12,-9],[-7,9],[-13,1]].forEach(p=>spawn('tree',p[0],p[1],0,null,true));
+  // Tucked against the edges and roads so every big lot stays open for the player.
+  spawn('pine',13,-4,0,null,true); spawn('pine',-13,10,0,null,true); spawn('bakery',9.5,9.5,2,null,true);
+  [[7.5,-1.5],[2.5,-1.5],[6.5,3.5],[-9.5,3.5]].forEach(p=>spawn('lamp',p[0],p[1],0,null,true));
 }
 // A saved city (P1.4) fully replaces the default starter borough, so a bulldozed
 // starter piece stays gone across reloads instead of reappearing.
@@ -261,8 +329,74 @@ function setGhostValid(valid) {
 }
 function hideCursors() { if (ghost) ghost.visible = false; pad.visible = false; highlight.visible = false; hover.valid = false; hover.target = null; }
 
+/* ---------- build menu ----------
+ * The piece buttons are generated from PIECES, so a new piece only needs a PIECES entry.
+ * Thumbnails are rendered from the real models once at startup on a throwaway renderer. */
+const SWATCHES = ['#d85545','#e96d4c','#f08a3c','#f0b832','#9bbc79','#4f895c','#72a7ad','#3f6fb5','#f5efe0','#a9aca3','#4a4e48','#986442'];
+
+function renderThumbnails() {
+  const r = new THREE.WebGLRenderer({ antialias:true, alpha:true, preserveDrawingBuffer:true });
+  r.setSize(150, 110, false);
+  r.outputColorSpace = THREE.SRGBColorSpace; r.toneMapping = THREE.ACESFilmicToneMapping; r.toneMappingExposure = 1.15;
+  const s = new THREE.Scene();
+  s.add(new THREE.HemisphereLight(0xfff9e8, 0x74866b, 2.3));
+  const key = new THREE.DirectionalLight(0xfff4d2, 3.4); key.position.set(-6, 10, 8); s.add(key);
+  const cam = new THREE.PerspectiveCamera(30, 150/110, .1, 100);
+  const dir = new THREE.Vector3(1, .9, 1.25).normalize(), box = new THREE.Box3(), sphere = new THREE.Sphere();
+  const out = {};
+  for (const [type, def] of Object.entries(PIECES)) {
+    const g = assemble(gg => def.build(gg, colorMat(def.color)));
+    if (def.scale !== 1) g.scale.setScalar(def.scale);
+    s.add(g); g.updateMatrixWorld(true);
+    box.setFromObject(g).getBoundingSphere(sphere);
+    cam.position.copy(sphere.center).addScaledVector(dir, sphere.radius / Math.sin(THREE.MathUtils.degToRad(15)) * .95);
+    cam.lookAt(sphere.center);
+    r.render(s, cam);
+    out[type] = r.domElement.toDataURL();
+    s.remove(g); g.traverse(o => { if (o.isInstancedMesh) o.dispose(); });
+  }
+  r.dispose(); r.forceContextLoss();
+  return out;
+}
+
+function selectColor(hex) {
+  selectedColor = colorMat(hex);
+  document.querySelector('.swatch').style.background = hex;
+  document.querySelectorAll('.color-dot').forEach(d => d.classList.toggle('active', d.dataset.color === hex));
+}
+function selectPiece(type) {
+  const def = PIECES[type];
+  selected = type;
+  document.querySelectorAll('.piece').forEach(x => x.classList.toggle('selected', x.dataset.piece === type));
+  document.querySelector('#selectedName').textContent = def.name;
+  document.querySelector('#colors').classList.toggle('locked', !def.tint);
+  selectColor(def.color);
+  rebuildGhost();
+}
+function buildMenu() {
+  const thumbs = renderThumbnails();
+  const list = document.querySelector('#pieces');
+  for (const [type, def] of Object.entries(PIECES)) {
+    const b = document.createElement('button');
+    b.className = 'piece'; b.dataset.piece = type; b.dataset.category = def.cat;
+    b.innerHTML = `<span class="piece-art"></span><strong></strong><small>${def.cost} brick${def.cost === 1 ? '' : 's'}</small>`;
+    b.querySelector('strong').textContent = def.name;
+    b.querySelector('.piece-art').style.backgroundImage = `url(${thumbs[type]})`;
+    b.addEventListener('click', () => selectPiece(type));
+    list.append(b);
+  }
+  const colors = document.querySelector('#colors');
+  for (const hex of SWATCHES) {
+    const d = document.createElement('button');
+    d.className = 'color-dot'; d.dataset.color = hex; d.style.background = hex; d.title = hex;
+    d.addEventListener('click', () => selectColor(hex));
+    colors.append(d);
+  }
+  selectPiece(selected);
+}
+
 /* ---------- interaction ---------- */
-let selected='home', selectedColor=mats.coral, tool='build', rotation=0;
+let selected='home', selectedColor=colorMat(PIECES.home.color), tool='build', rotation=0;
 const raycaster=new THREE.Raycaster(), pointer=new THREE.Vector2(), plane=new THREE.Plane(new THREE.Vector3(0,1,0),0);
 const hover = { x:0, z:0, valid:false, target:null };
 const hitPoint = new THREE.Vector3();
@@ -412,7 +546,7 @@ document.addEventListener('keydown',e=>{ if(e.key.toLowerCase()==='r' && !/^(INP
 // Ctrl/Cmd+Z undoes the last place() or bulldoze(); each action re-saves and re-deducts/refunds itself.
 document.addEventListener('keydown',e=>{ if(e.key.toLowerCase()==='z' && (e.ctrlKey||e.metaKey) && !gameOver && !/^(INPUT|TEXTAREA)$/.test(e.target.tagName)){ e.preventDefault(); if(popUndo()) hideCursors(); } });
 document.querySelector('#newCity')?.addEventListener('click',()=>{ if(confirm('Start a new city? This clears your saved progress.')){ clearCity(); resetUndo(); location.reload(); } });
-document.querySelectorAll('.piece').forEach(el=>el.addEventListener('click',()=>{document.querySelectorAll('.piece').forEach(x=>x.classList.remove('selected'));el.classList.add('selected');selected=el.dataset.piece;selectedColor=colorMat(el.dataset.color);document.querySelector('#selectedName').textContent=el.querySelector('strong').textContent;document.querySelector('.swatch').style.background=el.dataset.color;rebuildGhost();}));
+buildMenu();   // also selects the first piece and builds its ghost
 document.querySelectorAll('.category').forEach(el=>el.addEventListener('click',()=>{document.querySelectorAll('.category').forEach(x=>x.classList.remove('active'));el.classList.add('active');document.querySelectorAll('.piece').forEach(p=>p.hidden=el.dataset.category!=='all'&&p.dataset.category!==el.dataset.category)}));
 document.querySelector('#search').addEventListener('input',e=>document.querySelectorAll('.piece').forEach(p=>p.hidden=!p.textContent.toLowerCase().includes(e.target.value.toLowerCase())));
 document.querySelector('#closePanel').addEventListener('click',()=>document.querySelector('.build-panel').classList.toggle('closed'));
@@ -428,7 +562,6 @@ function zoomBy(factor) {
 document.querySelector('#zoomIn').onclick=()=>zoomBy(1/1.16);
 document.querySelector('#zoomOut').onclick=()=>zoomBy(1.16);
 
-rebuildGhost();
 updateHud();
 if (bricks <= 0 || !canStillBuild()) endRun();
 

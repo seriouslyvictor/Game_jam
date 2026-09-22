@@ -28,14 +28,29 @@ of it — that is how you stack. A piece needs its whole footprint resting at on
 so it can't hang off an edge or float, and a piece with something stacked on it can't be
 bulldozed until you clear what's above. Roads stay clear.
 
-Scoring rewards a borough that hangs together: homes like trees, shops and road frontage
-and dislike being overshadowed by towers, towers like clustering, trees like groves. The
+Scoring rewards a borough that hangs together: homes like greenery, shops, a fire station
+and a view of a landmark, and dislike being overshadowed by towers; towers like clustering;
+shops like homes and a town square; a landmark wants lots of different neighbours. The
 city saves to `localStorage` as you build.
+
+## Pieces
+
+| | |
+|---|---|
+| **City** | Cozy Home, Townhouse, Sunny Tower, Corner Shop, Bakery, Fire Station, Clock Tower |
+| **Nature** | Round Tree, Pine Tree, Tiny Park, Flower Bed, Duck Pond |
+| **Decor** | Fountain, Street Lamp |
+| **Basic** | 2 × 2 / 2 × 4 / 4 × 4 Brick, 4 × 4 Plate, 2 × 6 Arch, Roof Slope |
+
+Basic parts, homes and townhouses take the colour picked under the menu. Roofs, trees and
+decor are caps: nothing stacks on top of them. To add a piece, write its build function
+and give it an entry in `PIECES` in `src/main.js` (name, category, cost, footprint, height
+and the `kind` it scores as); the build menu and its thumbnail are generated from that.
 
 ## Layout
 
-- `src/main.js` — scene, piece geometry, the column grid, placement and input
-- `src/economy.js` — adjacency scoring, population, happiness, levels
+- `src/main.js` — scene, piece models and the `PIECES` table, the column grid, build menu, placement and input
+- `src/economy.js` — adjacency scoring by piece `kind`, population, happiness, levels
 - `src/hud.js` — HUD and end-of-run overlay
 - `src/persistence.js` — versioned `localStorage` save/load
 - `src/history.js` — undo stack
