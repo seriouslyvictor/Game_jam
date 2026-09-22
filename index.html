@@ -56,9 +56,9 @@
     </aside>
 
     <section class="city-info glass-panel">
-      <div class="level"><span>7</span><div><small>BOROUGH LEVEL</small><strong>Rising Builder</strong></div></div>
-      <div class="progress"><i></i></div>
-      <div class="stats"><span><small>POPULATION</small><b>1,248</b></span><span><small>HAPPINESS</small><b>😊 92%</b></span><span><small>BRICKS LEFT</small><b id="brickCount">640</b></span></div>
+      <div class="level"><span id="levelNum">1</span><div><small>BOROUGH LEVEL</small><strong id="levelName">Sketchy Lot</strong></div></div>
+      <div class="progress"><i id="progressBar" style="width:0%"></i></div>
+      <div class="stats"><span><small>POPULATION</small><b id="population">0</b></span><span><small>HAPPINESS</small><b id="happiness">😊 78%</b></span><span><small>BRICKS LEFT</small><b id="brickCount">640</b></span></div>
     </section>
 
     <div class="hint"><span>🖱</span><b>Click</b> to place <i></i><span>↔</span><b>Drag</b> to explore <i></i><b>Scroll</b> to zoom</div>
@@ -69,9 +69,26 @@
       <hr />
       <button id="zoomIn" title="Zoom in">＋</button>
       <button id="zoomOut" title="Zoom out">−</button>
+      <hr />
+      <button id="newCity" title="New city (clears saved progress)">⟲</button>
     </div>
 
     <div class="toast" id="toast">Cozy Home placed! <b>+12 XP</b></div>
+
+    <div class="game-over" id="gameOver">
+      <div class="game-over-card glass-panel">
+        <p class="eyebrow">OUT OF BRICKS</p>
+        <h1>Run complete</h1>
+        <div class="go-stats">
+          <span><small>FINAL SCORE</small><b id="goScore">0</b></span>
+          <span><small>POPULATION</small><b id="goPopulation">0</b></span>
+          <span><small>HAPPINESS</small><b id="goHappiness">0%</b></span>
+          <span><small>BOROUGH LEVEL</small><b id="goLevel">Sketchy Lot</b></span>
+        </div>
+        <button id="restartBtn">Build again</button>
+      </div>
+    </div>
+
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>
