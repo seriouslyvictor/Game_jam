@@ -62,4 +62,14 @@ kbd { border: 1px solid #d7d3c9; padding: 3px 7px; border-radius: 5px; box-shado
 .hint { position: fixed; z-index: 3; bottom: 25px; left: 50%; transform: translateX(-50%); padding: 10px 16px; background: rgba(48,54,44,.83); color: #e7e8df; border-radius: 22px; font-size: 10px; display: flex; align-items:center; gap: 5px; backdrop-filter: blur(6px); }.hint b{color:white}.hint i{height:13px;width:1px;background:#777c71;margin:0 6px}
 .tools { position: fixed; z-index: 3; right: 26px; top: 48%; border-radius: 12px; padding: 5px; display:flex; flex-direction:column; gap:3px }.tools button { width:36px;height:36px;border:0;border-radius:8px;background:transparent;cursor:pointer;font-size:17px}.tools button.active{background:#e77655;color:white}.tools hr{border:0;border-top:1px solid #e0ddd5;width:27px;margin:3px auto}
 .toast { position:fixed; z-index:10; left:50%; top:90px; transform:translate(-50%,-20px); background:#35433a;color:white;padding:11px 18px;border-radius:10px;font-size:12px;opacity:0;pointer-events:none;transition:.25s}.toast b{color:#f2c25c;margin-left:8px}.toast.show{opacity:1;transform:translate(-50%,0)}
+.game-over { position: fixed; inset: 0; z-index: 20; display: grid; place-items: center; background: rgba(35,40,30,0); pointer-events: none; transition: background .3s ease; }
+.game-over.show { background: rgba(35,40,30,.55); pointer-events: auto; }
+.game-over-card { width: 340px; padding: 28px 26px; border-radius: 18px; text-align: center; transform: translateY(14px) scale(.96); opacity: 0; transition: .3s ease; }
+.game-over.show .game-over-card { transform: none; opacity: 1; }
+.game-over-card h1 { margin: 0 0 18px; }
+.go-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px; }
+.go-stats span { background: #f3f0e8; border-radius: 10px; padding: 10px; }
+.go-stats small { display: block; font-size: 8px; letter-spacing: 1px; color: #999b93; }
+.go-stats b { display: block; font: 700 16px "Space Grotesk"; margin-top: 4px; }
+#restartBtn { width: 100%; border: 0; border-radius: 10px; background: #e66a48; color: white; font-weight: 700; padding: 13px; cursor: pointer; font-size: 13px; }
 @media(max-width:800px){nav{display:none}.build-panel{width:280px}.city-info{display:none}.profile span{display:none}.hint{display:none}.pieces{max-height:calc(100vh - 410px)} }
