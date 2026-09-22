@@ -1,24 +1,29 @@
 // src/economy.js — Dorfromantik-style adjacency scoring for Brick Borough.
-// Pure-ish helpers over the placement records main.js already tracks (`placed`, `occupied`).
+// Pure-ish helpers over the placement records main.js already tracks (`placed`, `columns`).
 // Nothing here touches the scene graph; main.js calls in with records and gets numbers back.
 
 export const POP = { home: 4, tower: 10 }; // population contributed per piece, for the HUD number
 const RADIUS = 2; // world units of clearance that still counts as "next to"
 
-// Chebyshev gap between two axis-aligned footprints, in world units. 0 means touching.
-// Records carry x/z centres and w/d spans; `cells` are Map keys and not usable as numbers.
+// Chebyshev gap between two axis-aligned boxes, in world units. 0 means touching.
+// Records carry x/y/z corners-of-mass and w/h/d spans; `cells` are Map keys, not numbers.
+// Height counts: two pieces sharing a footprint but six units apart are not neighbours.
 function gap(a, b) {
+  const ay = a.y || 0, by = b.y || 0, ah = a.h || 0, bh = b.h || 0;
   const dx = Math.max(0, Math.abs(a.x - b.x) - (a.w + b.w) / 2);
   const dz = Math.max(0, Math.abs(a.z - b.z) - (a.d + b.d) / 2);
-  return Math.max(dx, dz);
+  const dy = Math.max(0, Math.abs((ay + ah / 2) - (by + bh / 2)) - (ah + bh) / 2);
+  return Math.max(dx, dz, dy);
 }
 
 function neighbours(rec, placed) {
   return placed.filter(o => o !== rec && gap(rec, o) <= RADIUS);
 }
 
-// Walks the ring of cells just outside the footprint looking for road.
+// Walks the ring of cells just outside the footprint looking for road. Only ground-level
+// pieces can be "connected" -- a house stacked three storeys up has no road frontage.
 function touchesRoad(rec, isRoadCell) {
+  if ((rec.y || 0) > 0) return false;
   const x0 = Math.round(rec.x - rec.w / 2), x1 = Math.round(rec.x + rec.w / 2) - 1;
   const z0 = Math.round(rec.z - rec.d / 2), z1 = Math.round(rec.z + rec.d / 2) - 1;
   for (let cx = x0 - 1; cx <= x1 + 1; cx++) if (isRoadCell(cx, z0 - 1) || isRoadCell(cx, z1 + 1)) return true;
