@@ -112,25 +112,31 @@ function tree(g){ brick(g,0,.7,0,.45,1.4,.45,mats.brown);[[0,1.6,0],[.55,1.55,0]
 function shop(g){ brick(g,0,.55,0,4,1.1,3.2,mats.blue);brick(g,0,1.35,0,4.2,.5,3.4,mats.coral);studs(0,1.66,0,4.2,3.4,mats.coral);brick(g,0,.65,1.61,1.5,.85,.08,mats.white,false);}
 function car(x,z,color){const g=new THREE.Group();g.position.set(x,.12,z);scene.add(g);brick(g,0,.3,0,1.8,.45,.9,color,false);brick(g,0,.72,0,.9,.4,.8,mats.cream,false);[[-.55,.11,.48],[.55,.11,.48],[-.55,.11,-.48],[.55,.11,-.48]].forEach(p=>{const wheel=mesh(wheelGeo,mats.road,p,[1,1,1],g);wheel.rotation.x=Math.PI/2});}
 
+// `h` is the height of the piece's brick body, NOT including its studs -- so the next
+// piece up sits flush on the body and the studs bury into it, the way real bricks clutch.
 const PIECES = {
-  home:  { w:4, d:4, cost:24, scale:1,   build:(g,c)=>house(g,c) },
-  tower: { w:4, d:4, cost:42, scale:1,   build:g=>tower(g) },
-  tree:  { w:2, d:2, cost:8,  scale:.85, build:g=>tree(g) },
-  shop:  { w:5, d:4, cost:31, scale:1,   build:g=>shop(g) },
-  brick: { w:2, d:1, cost:1,  scale:1,   build:(g,c)=>brick(g,0,.3,0,2,.6,1,c) },
-  park:  { w:2, d:2, cost:16, scale:.85, build:g=>tree(g) },   // TODO(P3): give the park its own model
+  home:  { w:4, d:4, h:2,    cost:24, scale:1,   build:(g,c)=>house(g,c) },
+  tower: { w:4, d:4, h:3.4,  cost:42, scale:1,   build:g=>tower(g) },
+  tree:  { w:2, d:2, h:2.38, cost:8,  scale:.85, build:g=>tree(g) },
+  shop:  { w:5, d:4, h:1.6,  cost:31, scale:1,   build:g=>shop(g) },
+  brick: { w:2, d:1, h:.6,   cost:1,  scale:1,   build:(g,c)=>brick(g,0,.3,0,2,.6,1,c) },
+  park:  { w:2, d:2, h:2.38, cost:16, scale:.85, build:g=>tree(g) },   // TODO(P3): give the park its own model
 };
 
-/* ---------- occupancy grid ----------
- * One cell = one world unit. A piece with an even span centres on an integer, an odd
- * span on a half — so its footprint always lands on exact cell boundaries. */
-const occupied = new Map();
+/* ---------- column grid ----------
+ * One cell = one world unit in x/z. A piece with an even span centres on an integer, an
+ * odd span on a half — so its footprint always lands on exact cell boundaries. Each cell
+ * owns a column: the stack of pieces sitting on it, bottom-up. Height is continuous
+ * rather than quantised into levels, because the piece bodies aren't all multiples of
+ * one brick and stacking on the real body top is what makes them sit flush. */
+const columns = new Map();
 const placed = [];
-const ROAD = { road: true };
 const BOUNDS = { x: 14, z: 11.5 };
+const MAX_HEIGHT = 12;      // world units; keeps stacks inside the shadow frustum
 
 const snapAxis = (v, span) => span % 2 ? Math.round(v - .5) + .5 : Math.round(v);
 const spanOf = (type, rot) => rot % 2 ? [PIECES[type].d, PIECES[type].w] : [PIECES[type].w, PIECES[type].d];
+const column = key => columns.get(key) || (columns.set(key, { road:false, stack:[], top:0 }), columns.get(key));
 
 function cellsFor(x, z, w, d) {
   const out = [];
@@ -143,40 +149,69 @@ function inBounds(x, z, w, d) {
 }
 function reserve(x, z, w, d) {
   for (let cx = Math.floor(x - w/2); cx < Math.ceil(x + w/2); cx++)
-    for (let cz = Math.floor(z - d/2); cz < Math.ceil(z + d/2); cz++) occupied.set(cx + ',' + cz, ROAD);
+    for (let cz = Math.floor(z - d/2); cz < Math.ceil(z + d/2); cz++) column(cx + ',' + cz).road = true;
+}
+
+// The height a footprint would rest at, or null when it can't sit there at all: roads are
+// never buildable, and a footprint spanning columns of differing heights has nothing flat
+// to clutch onto, so it would float or intersect. Ground level is a support height of 0.
+function supportHeight(cells) {
+  let h = null;
+  for (const key of cells) {
+    const col = columns.get(key);
+    if (col && col.road) return null;
+    const top = col ? col.top : 0;
+    if (h === null) h = top;
+    else if (Math.abs(top - h) > 1e-6) return null;
+  }
+  return h;
+}
+// A piece is only removable while nothing rests on it -- pull the stack apart from the top.
+function isExposed(record) {
+  return record.cells.every(key => {
+    const col = columns.get(key);
+    return col && col.stack[col.stack.length - 1] === record;
+  });
 }
 
 let nextId = 1;
 // `id` is stable across demolish/respawn so an undo entry can find the live record
 // even after an intervening undo rebuilt that piece as a new object.
-function spawn(type, x, z, rot, color, starter = false, id = nextId++) {
+function spawn(type, x, z, rot, color, starter = false, id = nextId++, y = 0) {
   const def = PIECES[type];
   const [w, d] = spanOf(type, rot);
   x = snapAxis(x, w); z = snapAxis(z, d);
   const g = assemble(gg => def.build(gg, color || mats.coral));
-  g.position.set(x, 0, z);
+  g.position.set(x, y, z);
   g.rotation.y = rot * Math.PI / 2;
   if (def.scale !== 1) g.scale.setScalar(def.scale);
   scene.add(g);
-  // rot/color/starter ride along on the record so persistence and undo can rebuild this exact piece.
-  const record = { id, type, group: g, cells: cellsFor(x, z, w, d), w, d, x, z, rot, color: color ? '#' + color.color.getHexString() : null, starter, score: 0, refund: starter ? 0 : def.cost };
+  // rot/color/starter/y ride along on the record so persistence and undo can rebuild this exact piece.
+  const record = { id, type, group: g, cells: cellsFor(x, z, w, d), w, d, h: def.h, x, y, z, rot, color: color ? '#' + color.color.getHexString() : null, starter, score: 0, refund: starter ? 0 : def.cost };
   if (id >= nextId) nextId = id + 1;
   g.userData.record = record;
-  record.cells.forEach(c => occupied.set(c, record));
+  record.cells.forEach(key => { const col = column(key); col.stack.push(record); col.top = y + def.h; });
   placed.push(record);
   return record;
 }
 function demolish(record) {
   const i = placed.indexOf(record);
   if (i < 0) return false;            // stale record: indexOf -1 would splice off the last live piece
-  record.cells.forEach(c => { if (occupied.get(c) === record) occupied.delete(c); });
+  record.cells.forEach(key => {
+    const col = columns.get(key);
+    if (!col) return;
+    const at = col.stack.indexOf(record);
+    if (at >= 0) col.stack.splice(at, 1);
+    const below = col.stack[col.stack.length - 1];
+    col.top = below ? below.y + below.h : 0;
+  });
   scene.remove(record.group);
   record.group.traverse(o => { if (o.isInstancedMesh) o.dispose(); });   // shared geo/materials stay alive
   placed.splice(i, 1);
   return true;
 }
 const byId = id => placed.find(r => r.id === id);
-const isRoadCell = (cx, cz) => occupied.get(cx + ',' + cz) === ROAD;
+const isRoadCell = (cx, cz) => !!columns.get(cx + ',' + cz)?.road;
 
 /* ---------- starting borough ---------- */
 road(0,1.2,30,3); road(4.5,0,3,25);
@@ -192,7 +227,9 @@ function defaultCity() {
 // starter piece stays gone across reloads instead of reappearing.
 const savedCity = loadCity();
 if (savedCity) {
-  savedCity.placed.forEach(r => { spawn(r.type, r.x, r.z, r.rot, r.color ? colorMat(r.color) : null, r.starter, r.id).score = r.score || 0; });
+  // Replay bottom-up: a piece's column has to exist beneath it before it can rest on it.
+  [...savedCity.placed].sort((a, b) => (a.y || 0) - (b.y || 0))
+    .forEach(r => { spawn(r.type, r.x, r.z, r.rot, r.color ? colorMat(r.color) : null, r.starter, r.id, r.y || 0).score = r.score || 0; });
   bricks = savedCity.bricks;
   runScore = savedCity.runScore || 0;
 } else defaultCity();
@@ -250,17 +287,31 @@ function updateHover(e) {
 
   hover.target = null;
   highlight.visible = false;
-  if (!raycaster.ray.intersectPlane(plane, hitPoint)) { hideCursors(); return; }
 
-  const [w, d] = spanOf(selected, rotation);
-  const x = snapAxis(hitPoint.x, w), z = snapAxis(hitPoint.z, d);
-  const clear = cellsFor(x, z, w, d).every(c => !occupied.has(c));
-  hover.x = x; hover.z = z;
-  hover.valid = clear && inBounds(x, z, w, d) && bricks >= PIECES[selected].cost;
+  // Aim at whatever is actually under the cursor: the nearest placed piece if there is
+  // one, otherwise the ground. Using the ground plane alone would make tall stacks
+  // unaimable, since their tops sit well away from where the plane projects.
+  const hits = raycaster.intersectObjects(placed.map(r => r.group), true);
+  if (hits.length) hitPoint.copy(hits[0].point);
+  else if (!raycaster.ray.intersectPlane(plane, hitPoint)) { hideCursors(); return; }
 
+  const [w, d] = aim(hitPoint.x, hitPoint.z);
   setGhostValid(hover.valid);
-  ghost.visible = true; ghost.position.set(x, 0, z);
-  pad.visible = true; pad.position.set(x, .09, z); pad.scale.set(w, .06, d);
+  ghost.visible = true; ghost.position.set(hover.x, hover.y, hover.z);
+  pad.visible = true; pad.position.set(hover.x, hover.y + .09, hover.z); pad.scale.set(w, .06, d);
+}
+
+// Resolves where the selected piece would land over a world x/z -- the snapped cell, the
+// height it would rest at, and whether it may go there. The single source of truth for
+// placement legality: the ghost, the click handler and the run-over check all read it.
+function aim(x, z) {
+  const [w, d] = spanOf(selected, rotation);
+  const sx = snapAxis(x, w), sz = snapAxis(z, d);
+  const y = supportHeight(cellsFor(sx, sz, w, d));
+  hover.x = sx; hover.z = sz; hover.y = y ?? 0;
+  hover.valid = y !== null && y + PIECES[selected].h <= MAX_HEIGHT
+    && inBounds(sx, sz, w, d) && bricks >= PIECES[selected].cost;
+  return [w, d];
 }
 
 function place() {
@@ -268,7 +319,7 @@ function place() {
   const def = PIECES[selected];
   if (bricks < def.cost) return toast('Not enough bricks', '');
   if (!hover.valid) return toast('No room there', '');
-  const record = spawn(selected, hover.x, hover.z, rotation, selectedColor);
+  const record = spawn(selected, hover.x, hover.z, rotation, selectedColor, false, nextId++, hover.y);
   const { total, notes } = scorePlacement(record, placed, isRoadCell);
   record.score = total;
   runScore += total;
@@ -287,8 +338,9 @@ function bulldoze() {
   if (gameOver) return;
   const record = hover.target;
   if (!record) return;
+  if (!isExposed(record)) return toast('Something is stacked on that', '');
   // Snapshot before demolish() so undo can rebuild the exact same piece, id included.
-  const snap = { id: record.id, type: record.type, x: record.x, z: record.z, rot: record.rot, color: record.color, starter: record.starter, score: record.score, refund: record.refund };
+  const snap = { id: record.id, type: record.type, x: record.x, y: record.y, z: record.z, rot: record.rot, color: record.color, starter: record.starter, score: record.score, refund: record.refund };
   if (!demolish(record)) return;
   bricks += record.refund;
   runScore -= record.score;
@@ -297,7 +349,7 @@ function bulldoze() {
   hover.target = null;
   toast('Cleared ', record.refund ? `+${record.refund} bricks` : '');
   pushUndo({ undo: () => {
-    const r = spawn(snap.type, snap.x, snap.z, snap.rot, snap.color ? colorMat(snap.color) : null, snap.starter, snap.id);
+    const r = spawn(snap.type, snap.x, snap.z, snap.rot, snap.color ? colorMat(snap.color) : null, snap.starter, snap.id, snap.y);
     r.score = snap.score; bricks -= snap.refund; runScore += snap.score; updateHud(); persistNow();
   } });
   persistNow();
@@ -305,15 +357,17 @@ function bulldoze() {
 
 // After anything changes the board or the budget, the ghost's colour may be stale.
 function updateGhostValidity() {
-  if (tool !== 'build' || !ghost || !ghost.visible) return;
-  const [w, d] = spanOf(selected, rotation);
-  const clear = cellsFor(hover.x, hover.z, w, d).every(c => !occupied.has(c));
-  hover.valid = clear && inBounds(hover.x, hover.z, w, d) && bricks >= PIECES[selected].cost;
+  if (tool !== 'build' || !ghost) return;
+  const [w, d] = aim(hover.x, hover.z);
+  if (ghost.visible) {
+    ghost.position.set(hover.x, hover.y, hover.z);
+    pad.position.set(hover.x, hover.y + .09, hover.z); pad.scale.set(w, .06, d);
+  }
   setGhostValid(hover.valid);
 }
 
 const updateHud = () => renderHud({ placed, runScore, bricks });
-const persistNow = () => scheduleSave({ bricks, runScore, placed: placed.map(r => ({ id:r.id, type:r.type, x:r.x, z:r.z, rot:r.rot, color:r.color, starter:r.starter, score:r.score })) });
+const persistNow = () => scheduleSave({ bricks, runScore, placed: placed.map(r => ({ id:r.id, type:r.type, x:r.x, y:r.y, z:r.z, rot:r.rot, color:r.color, starter:r.starter, score:r.score })) });
 
 // True while at least one affordable piece still has somewhere legal to go.
 function canStillBuild() {
@@ -323,7 +377,9 @@ function canStillBuild() {
       const [w, d] = spanOf(type, rot);
       for (let x = -BOUNDS.x; x <= BOUNDS.x; x++) for (let z = -BOUNDS.z; z <= BOUNDS.z; z++) {
         const sx = snapAxis(x, w), sz = snapAxis(z, d);
-        if (inBounds(sx, sz, w, d) && cellsFor(sx, sz, w, d).every(c => !occupied.has(c))) return true;
+        if (!inBounds(sx, sz, w, d)) continue;
+        const y = supportHeight(cellsFor(sx, sz, w, d));   // stacking counts: a full plate isn't a dead end
+        if (y !== null && y + PIECES[type].h <= MAX_HEIGHT) return true;
       }
     }
     return false;
@@ -378,5 +434,6 @@ if (bricks <= 0 || !canStillBuild()) endRun();
 
 function animate(){controls.update();renderer.render(scene,camera);requestAnimationFrame(animate)}animate();
 addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);renderer.setPixelRatio(Math.min(devicePixelRatio,1.75))});
+
 
 
