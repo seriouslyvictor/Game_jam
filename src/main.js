@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import './style.css';
+import { scheduleSave, loadCity, clearCity } from './persistence.js';
+import { pushUndo, popUndo, resetUndo } from './history.js';
 
 const canvas = document.querySelector('#world');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
@@ -151,7 +153,8 @@ function spawn(type, x, z, rot, color, starter = false) {
   g.rotation.y = rot * Math.PI / 2;
   if (def.scale !== 1) g.scale.setScalar(def.scale);
   scene.add(g);
-  const record = { type, group: g, cells: cellsFor(x, z, w, d), w, d, x, z, refund: starter ? 0 : def.cost };
+  // rot/color/starter ride along on the record so persistence and undo can rebuild this exact piece.
+  const record = { type, group: g, cells: cellsFor(x, z, w, d), w, d, x, z, rot, color: color ? '#' + color.color.getHexString() : null, starter, refund: starter ? 0 : def.cost };
   g.userData.record = record;
   record.cells.forEach(c => occupied.set(c, record));
   placed.push(record);
@@ -168,9 +171,17 @@ function demolish(record) {
 road(0,1.2,30,3); road(4.5,0,3,25);
 reserve(0,1.2,30,3); reserve(4.5,0,3,25);
 
-spawn('home',-7,-4.3,0,mats.coral,true); spawn('home',10,-4.1,0,mats.blue,true);
-spawn('tower',-10,6.3,0,null,true); spawn('shop',9,6.1,0,null,true); spawn('tower',.7,-6.2,0,null,true);
-[[-12,-6],[-5,-7],[-2,7],[7,-7],[13,7],[12,-9],[-7,9],[-13,1]].forEach(p=>spawn('tree',p[0],p[1],0,null,true));
+let bricks = 640;   // declared here so a restored save can overwrite it before the HUD reads it
+function defaultCity() {
+  spawn('home',-7,-4.3,0,mats.coral,true); spawn('home',10,-4.1,0,mats.blue,true);
+  spawn('tower',-10,6.3,0,null,true); spawn('shop',9,6.1,0,null,true); spawn('tower',.7,-6.2,0,null,true);
+  [[-12,-6],[-5,-7],[-2,7],[7,-7],[13,7],[12,-9],[-7,9],[-13,1]].forEach(p=>spawn('tree',p[0],p[1],0,null,true));
+}
+// A saved city (P1.4) fully replaces the default starter borough, so a bulldozed
+// starter piece stays gone across reloads instead of reappearing.
+const savedCity = loadCity();
+if (savedCity) { savedCity.placed.forEach(r => spawn(r.type, r.x, r.z, r.rot, r.color ? colorMat(r.color) : null, r.starter)); bricks = savedCity.bricks; }
+else defaultCity();
 car(-5,1.2,mats.coral);car(8,1.2,mats.yellow);
 
 const grid = new THREE.GridHelper(30,30,0xffffff,0xffffff);grid.position.y=.05;grid.material.opacity=.09;grid.material.transparent=true;scene.add(grid);
@@ -200,7 +211,7 @@ function setGhostValid(valid) {
 function hideCursors() { if (ghost) ghost.visible = false; pad.visible = false; highlight.visible = false; hover.valid = false; hover.target = null; }
 
 /* ---------- interaction ---------- */
-let selected='home', selectedColor=mats.coral, tool='build', bricks=640, rotation=0;
+let selected='home', selectedColor=mats.coral, tool='build', rotation=0;
 const raycaster=new THREE.Raycaster(), pointer=new THREE.Vector2(), plane=new THREE.Plane(new THREE.Vector3(0,1,0),0);
 const hover = { x:0, z:0, valid:false, target:null };
 const hitPoint = new THREE.Vector3();
@@ -241,21 +252,27 @@ function place() {
   const def = PIECES[selected];
   if (bricks < def.cost) return toast('Out of bricks!', '');
   if (!hover.valid) return toast('No room there', '');
-  spawn(selected, hover.x, hover.z, rotation, selectedColor);
+  const record = spawn(selected, hover.x, hover.z, rotation, selectedColor);
   bricks -= def.cost;
   updateHud();
   toast(`${document.querySelector('#selectedName').textContent} placed! `, `+${def.cost} XP`);
   updateGhostValidity();
+  pushUndo({ undo: () => { demolish(record); bricks += record.refund; updateHud(); persistNow(); } });
+  persistNow();
 }
 function bulldoze() {
   const record = hover.target;
   if (!record) return;
+  // Snapshot before demolish() so undo can rebuild the exact same piece.
+  const snap = { type: record.type, x: record.x, z: record.z, rot: record.rot, color: record.color, starter: record.starter, refund: record.refund };
   demolish(record);
   bricks += record.refund;
   updateHud();
   highlight.visible = false;
   hover.target = null;
   toast('Cleared. ', record.refund ? `+${record.refund} bricks` : '');
+  pushUndo({ undo: () => { spawn(snap.type, snap.x, snap.z, snap.rot, snap.color ? colorMat(snap.color) : null, snap.starter); bricks -= snap.refund; updateHud(); persistNow(); } });
+  persistNow();
 }
 
 // After anything changes the board or the budget, the ghost's colour may be stale.
@@ -268,6 +285,7 @@ function updateGhostValidity() {
 }
 
 const updateHud = () => { document.querySelector('#brickCount').textContent = bricks; };
+const persistNow = () => scheduleSave({ bricks, placed: placed.map(r => ({ type:r.type, x:r.x, z:r.z, rot:r.rot, color:r.color, starter:r.starter })) });
 let toastTimer;
 function toast(message, note = '') {
   const el = document.querySelector('#toast');
@@ -295,6 +313,9 @@ canvas.addEventListener('pointerup', e => {
 });
 
 document.addEventListener('keydown',e=>{ if(e.key.toLowerCase()==='r' && !/^(INPUT|TEXTAREA)$/.test(e.target.tagName)){ rotation=(rotation+1)%4; if(ghost) ghost.rotation.y=rotation*Math.PI/2; } });
+// Ctrl/Cmd+Z undoes the last place() or bulldoze(); each action re-saves and re-deducts/refunds itself.
+document.addEventListener('keydown',e=>{ if(e.key.toLowerCase()==='z' && (e.ctrlKey||e.metaKey) && !/^(INPUT|TEXTAREA)$/.test(e.target.tagName)){ e.preventDefault(); if(popUndo()) hideCursors(); } });
+document.querySelector('#newCity')?.addEventListener('click',()=>{ if(confirm('Start a new city? This clears your saved progress.')){ clearCity(); resetUndo(); location.reload(); } });
 document.querySelectorAll('.piece').forEach(el=>el.addEventListener('click',()=>{document.querySelectorAll('.piece').forEach(x=>x.classList.remove('selected'));el.classList.add('selected');selected=el.dataset.piece;selectedColor=colorMat(el.dataset.color);document.querySelector('#selectedName').textContent=el.querySelector('strong').textContent;document.querySelector('.swatch').style.background=el.dataset.color;rebuildGhost();}));
 document.querySelectorAll('.category').forEach(el=>el.addEventListener('click',()=>{document.querySelectorAll('.category').forEach(x=>x.classList.remove('active'));el.classList.add('active');document.querySelectorAll('.piece').forEach(p=>p.hidden=el.dataset.category!=='all'&&p.dataset.category!==el.dataset.category)}));
 document.querySelector('#search').addEventListener('input',e=>document.querySelectorAll('.piece').forEach(p=>p.hidden=!p.textContent.toLowerCase().includes(e.target.value.toLowerCase())));
